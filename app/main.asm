@@ -79,17 +79,57 @@ RESET       mov.w   #__STACK_END,SP         ; Initialize stack pointer
 StopWDT     mov.w   #WDTPW+WDTHOLD,&WDTCTL  ; Stop WDT
 SetupP1     bic.b   #BIT0,&P1OUT            ; Clear P1.0 output
             bis.b   #BIT0,&P1DIR            ; P1.0 output
+SetupP2     bic.b   #BIT6, &P6OUT
+            bis.b   #BIT6, &P6DIR
+SetupTimerBO
+            bis.w   #TBCLR, &TB0CTL
+            bis.w   #TBSSEL__ACLK, &TB0CTL
+            bis.w   #MC__UP, &TB0CTL
+
+            mov.w   #32768, &TB0CCR0
+            bic.w   #CCIFG, &TB0CCTL0
+            bis.w   #CCIE, &TB0CCTL0
+
+            NOP
+            bis.w   #GIE, SR
+            NOP
+
             bic.w   #LOCKLPM5,&PM5CTL0       ; Unlock I/O pins
 
 Mainloop    xor.b   #BIT0,&P1OUT            ; Toggle P1.0 every 0.1s
-Wait        mov.w   #50000,R15              ; Delay to R15
-L1          dec.w   R15                     ; Decrement R15
-            jnz     L1                      ; Delay over?
-            jmp     Mainloop                ; Again
+            
+            mov.w   #10, R14
+Wait        mov.w   #35000,R15              ; resets Delay to R15
+            call    #Delay100ms
+            dec.w   R14                 
+            jnz     Wait                ; Again
+            jmp     Mainloop               
             NOP
+
+;------------------------------------------------------------------------------
+;           Subroutines
+;------------------------------------------------------------------------------
+Delay100ms:
+            dec.w     R15
+            jnz       Delay100ms
+            ret
+
+;------------------------------------------------------------------------------
+;           Interrupt Service Routines
+;------------------------------------------------------------------------------
+ISR_TB0_CCR0:
+            xor.b   #BIT6, &P6OUT
+            bic.w   #CCIFG, &TB0CCTL0
+            reti
+
+
 ;------------------------------------------------------------------------------
 ;           Interrupt Vectors
 ;------------------------------------------------------------------------------
             .sect   RESET_VECTOR            ; MSP430 RESET Vector
             .short  RESET                   ;
+
+            .sect   ".int43"
+            .short  ISR_TB0_CCR0
+
             .end
